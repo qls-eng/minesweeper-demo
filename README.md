@@ -80,6 +80,7 @@ minesweeper-demo/
 ├── docs/
 │   ├── preview.png          # 预览图（--smoke 自动生成）
 │   ├── preview-intermediate.png
+│   ├── REQUIREMENTS.md      # 需求规格 + 需求/实现/测试追踪矩阵
 │   └── DEV_PLAN.md          # 迭代计划与提交规范
 ├── assets/
 │   └── README.md            # 素材来源与授权说明（当前无外部素材）
@@ -132,6 +133,7 @@ OK
 
 ## 工程化约定
 
+- **需求先行**：新功能先写进 `docs/REQUIREMENTS.md`（编号 + 优先级 + 可测试的验收标准），再进排期
 - **提交信息**：Conventional Commits，例如 `feat(core): 首次点击安全区`、`fix(ui): 修正高 DPI 缩放`、`docs: 补充架构说明`
 - **分支**：`main` 保持可运行；功能在 `feat/<主题>` 上开发，自测通过再合并
 - **提交前自检**：`python -m unittest discover -s tests -t . -v` + `python main.py --smoke` 必须都过
@@ -139,7 +141,7 @@ OK
 
 ## Roadmap
 
-后续迭代（详见 [`docs/DEV_PLAN.md`](docs/DEV_PLAN.md)）：
+后续迭代（详见 [`docs/DEV_PLAN.md`](docs/DEV_PLAN.md)），需求清单与验收标准见 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)：
 
 - v0.2 双击和弦（数字格周围旗数足够时一次翻开剩余格）
 - v0.3 本地最佳成绩与对局记录（JSON 存档）
