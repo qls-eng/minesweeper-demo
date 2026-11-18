@@ -124,8 +124,8 @@
 | F-10 | `ui.App._draw_hud` | `--smoke` 截图目视 + `Game.mines_left` 用例 |
 | F-11 | `ui.App._draw_banner` | `--smoke` 构造终局截图目视 |
 | F-12 | `core.Board.chord`、`game.Game.chord`、`ui.App._on_left_click` | `ChordTest` 6 条用例 + 无窗口模拟双击验证（翻开数 46→49，覆盖格连点两次不误触发） |
-| F-13 | **待实现** | **待补** |
-| F-14 | **待实现** | **待补** |
+| F-13 | `ui.App.handle_event`（MOUSEBUTTONDOWN 记 `pressed_cell`、MOUSEBUTTONUP 同格才翻开、MOUSEMOTION 拖出取消）、`ui.App._draw_cell` 凹陷分支 | 纯 UI 无单测；无窗口事件模拟：按下后翻开数不变、松开后 46→52、拖出后仍 46；三态像素采样 普通(196,206,223) → 悬停(212,222,237) → 按下(156,168,188) |
+| F-14 | `core.Board.wrong_flags`、`ui.App.draw`（每帧算 `_wrong_flags` 集合）、`ui.App._draw_cross` | `WrongFlagTest` 3 条用例（只挑错旗 / 全对时为空 / 已翻开格不计）；失败画面截图核对红叉 |
 | N-01 | `ui.App.FPS`、`core._flood_reveal` | expert 档手动实测 |
 | N-02 | `core.py` 无 pygame 依赖 | `python -m unittest discover -s tests -t . -v` |
 | N-03 | 分层结构 | 提交前自查 + code review 清单 |
@@ -153,3 +153,4 @@
 | 2026-11-18 | v0.2 | 新增 F-12 双击和弦（Must），追踪矩阵标记为待实现 | 迭代 v0.2 手感优化，需求先行 |
 | 2026-11-18 | v0.2 | F-12 实现完成，追踪矩阵回填实现位置与测试用例（共 27 条测试） | 按流程完成实现与验证 |
 | 2026-11-18 | v0.2 | 新增 F-13 按下凹陷、F-14 错旗打叉，矩阵标记为待实现 | 补齐 v0.2 交互手感剩余两项 |
+| 2026-11-18 | v0.2 | F-13 / F-14 实现完成并回填矩阵，测试 27 → 30 条 | v0.2 交付 |
