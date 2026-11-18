@@ -157,6 +157,52 @@ class FloodTest(unittest.TestCase):
         self.assertEqual(board.cells[0][0].state, CellState.HIDDEN)
 
 
+class ChordTest(unittest.TestCase):
+    """F-12 双击和弦。"""
+
+    def test_chord_opens_remaining_neighbors_when_flags_match(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.reveal(1, 1)                     # 该格 adjacent = 1
+        board.toggle_flag(0, 0)                # 旗插对
+        self.assertTrue(board.chord(1, 1))
+        # (0,0) 是雷，保持插旗状态；其余邻格都该被翻开
+        self.assertEqual(board.cells[0][0].state, CellState.FLAGGED)
+        for row, col in [(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1), (2, 2)]:
+            self.assertEqual(board.cells[row][col].state, CellState.REVEALED)
+
+    def test_chord_does_nothing_when_flag_count_mismatch(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.reveal(1, 1)
+        self.assertFalse(board.chord(1, 1))    # 一面旗都没有，不该有动作
+
+    def test_chord_on_hidden_cell_is_ignored(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        self.assertFalse(board.chord(3, 3))
+
+    def test_chord_on_zero_cell_is_ignored(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.reveal(3, 3)                     # adjacent = 0 的已翻开格
+        self.assertFalse(board.chord(3, 3))
+
+    def test_chord_with_wrong_flag_loses(self):
+        """旗插错时和弦会踩雷，这是经典规则，不做额外保护。"""
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.reveal(1, 1)
+        board.toggle_flag(1, 2)                # 旗插在非雷格：数量对上了，位置错了
+        self.assertTrue(board.chord(1, 1))
+        self.assertEqual(board.status, GameStatus.LOST)
+        self.assertEqual(board.cells[0][0].state, CellState.REVEALED)
+
+    def test_chord_ignored_after_game_over(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.reveal(1, 1)
+        board.toggle_flag(0, 0)
+        board.toggle_flag(0, 0)                # 取消旗
+        board.reveal(0, 0)                     # 踩雷，进入终局
+        self.assertEqual(board.status, GameStatus.LOST)
+        self.assertFalse(board.chord(1, 1))
+
+
 class EndGameTest(unittest.TestCase):
     def test_mine_click_loses_and_exposes_all_mines(self):
         board = Board(make_level(9, 9, 10), rng=random.Random(5))

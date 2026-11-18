@@ -132,6 +132,45 @@ class Board:
         elif cell.state is CellState.FLAGGED:
             cell.state = CellState.HIDDEN
 
+    def chord(self, row: int, col: int) -> bool:
+        """双击和弦：在已翻开的数字格上，按周围旗数一次翻开其余邻格（F-12）。
+
+        返回是否执行了操作。前置条件不满足时（不是已翻开的数字格、旗数与数字不等、
+        没有可翻的邻格）返回 False，方便 UI 与测试区分"没用"和"用了但踩雷"。
+
+        注意：旗插错时和弦会踩雷，这是经典规则的正常结果，这里刻意不做保护，
+        否则插旗就失去了信息标记的意义。
+        """
+        if self.is_over or not self.in_bounds(row, col):
+            return False
+
+        cell = self.cells[row][col]
+        if cell.has_mine or cell.state is not CellState.REVEALED or cell.adjacent == 0:
+            return False
+
+        flagged = sum(
+            1
+            for nr, nc in self.neighbors(row, col)
+            if self.cells[nr][nc].state is CellState.FLAGGED
+        )
+        if flagged != cell.adjacent:
+            return False
+
+        targets = [
+            (nr, nc)
+            for nr, nc in self.neighbors(row, col)
+            if self.cells[nr][nc].state is CellState.HIDDEN
+        ]
+        if not targets:
+            return False
+
+        # 复用 reveal：踩雷判定、连锁展开、胜利判定都走同一条路径，不另写一套
+        for nr, nc in targets:
+            self.reveal(nr, nc)
+            if self.is_over:
+                break
+        return True
+
     # ---------- 内部实现 ----------
 
     def _place_mines(self, safe_row: int, safe_col: int) -> None:

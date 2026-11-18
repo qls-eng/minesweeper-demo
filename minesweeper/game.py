@@ -66,6 +66,13 @@ class Game:
         self.board.toggle_flag(row, col)
         self._sync_timer(before)
 
+    def chord(self, row: int, col: int) -> bool:
+        """双击和弦，返回是否真正执行了翻开动作。"""
+        before = self.board.status
+        changed = self.board.chord(row, col)
+        self._sync_timer(before)
+        return changed
+
     # ---------- 内部 ----------
 
     def _sync_timer(self, before: GameStatus) -> None:

@@ -8,6 +8,7 @@
 
 操作说明：
     左键点击  翻开
+    左键双击  在已翻开的数字格上和弦（周围旗数等于该数字时一次翻开其余邻格）
     右键点击  插旗 / 取消旗
     R        重开
     1 / 2 / 3 切换难度
@@ -30,6 +31,7 @@ from .game import Game
 class App:
     FPS = 60
     RESTART_SIZE = (108, 34)
+    DOUBLE_CLICK_MS = 400   # 双击判定窗口（毫秒）
 
     def __init__(self, levels: list[LevelConfig], level_key: str, seed: int | None = None) -> None:
         self._enable_dpi_awareness()
@@ -40,6 +42,7 @@ class App:
         self.levels = levels
         self.seed = seed
         self.hover: tuple[int, int] | None = None
+        self._reset_click_state()
 
         self.level_index = levels.index(find_level(levels, level_key))
         self._load_level(self.level_index)
@@ -61,9 +64,15 @@ class App:
         self.level_index = index
         self.game = Game(self.levels[index], seed=self.seed)
         self.hover = None
+        self._reset_click_state()
         self._layout()
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption(f"Minesweeper Demo - {self.levels[index].name}")
+
+    def _reset_click_state(self) -> None:
+        """清空双击判定状态（重开、切难度时都要清，避免跨局误触发）。"""
+        self._last_click_cell: tuple[int, int] | None = None
+        self._last_click_time = -9999
 
     def _layout(self) -> None:
         """按棋盘尺寸算出窗口几何，切难度时自动重算。"""
@@ -112,6 +121,7 @@ class App:
                 return False
             if event.key == pygame.K_r:
                 self.game.restart()
+                self._reset_click_state()
             elif pygame.K_1 <= event.key <= pygame.K_9:
                 index = event.key - pygame.K_1
                 if index < len(self.levels):
@@ -125,6 +135,7 @@ class App:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1 and self.restart_rect.collidepoint(event.pos):
                 self.game.restart()
+                self._reset_click_state()
                 return True
 
             cell = self._cell_at(event.pos)
@@ -132,10 +143,36 @@ class App:
                 return True
 
             if event.button == 1:
-                self.game.reveal(*cell)
+                self._on_left_click(cell)
             elif event.button == 3:
                 self.game.toggle_flag(*cell)
         return True
+
+    def _on_left_click(self, cell: tuple[int, int]) -> None:
+        """左键：覆盖格直接翻开；已翻开的数字格双击触发和弦（F-12）。
+
+        双击判定只在"点击前就已经是已翻开状态"的格子上生效，
+        避免刚翻开的格子被连点误判成和弦。
+        """
+        row, col = cell
+        state = self.game.board.cells[row][col].state
+
+        if state is not CellState.REVEALED:
+            self._last_click_cell = None
+            self.game.reveal(row, col)
+            return
+
+        now = pygame.time.get_ticks()
+        is_double_click = (
+            self._last_click_cell == cell
+            and now - self._last_click_time <= self.DOUBLE_CLICK_MS
+        )
+        if is_double_click:
+            self._reset_click_state()   # 只消费一次，三连击不会连续和弦
+            self.game.chord(row, col)
+        else:
+            self._last_click_cell = cell
+            self._last_click_time = now
 
     # ---------- 绘制 ----------
 
