@@ -6,11 +6,24 @@
 ![beginner](docs/preview.png)
 
 <details>
-<summary>Intermediate 16×16 预览</summary>
+<summary>Intermediate 16×16 / Expert 16×30 预览</summary>
 
 ![intermediate](docs/preview-intermediate.png)
+![expert](docs/preview-expert.png)
 
 </details>
+
+<details>
+<summary>终局画面</summary>
+
+![win](docs/preview-win.png)
+![lost](docs/preview-lost.png)
+
+失败时只做轻微蒙层，雷与数字仍然清晰，方便复盘；胜利时把所有雷标成旗子。
+
+</details>
+
+> 以上截图由 `python tools/shots.py` 自动生成，改配色后跑一次即可全套刷新。
 
 ---
 
@@ -80,10 +93,15 @@ minesweeper-demo/
 ├── tests/
 │   └── test_core.py         # 21 个单元测试，覆盖布雷、计数、洪水填充、胜负
 ├── docs/
-│   ├── preview.png          # 预览图（--smoke 自动生成）
+│   ├── preview.png          # 预览图（tools/shots.py 生成）
 │   ├── preview-intermediate.png
+│   ├── preview-expert.png
+│   ├── preview-win.png
+│   ├── preview-lost.png
 │   ├── REQUIREMENTS.md      # 需求规格 + 需求/实现/测试追踪矩阵
 │   └── DEV_PLAN.md          # 迭代计划与提交规范
+├── tools/
+│   └── shots.py             # 批量生成预览图（无窗口，可用于 CI）
 ├── assets/
 │   └── README.md            # 素材来源与授权说明（当前无外部素材）
 ├── requirements.txt
