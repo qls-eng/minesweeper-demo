@@ -248,12 +248,16 @@ class App:
             return True
 
         if event.type == pygame.MOUSEMOTION:
+            if self.custom_open:
+                return True      # 面板打开时鼠标事件全部吞掉，别在背后动棋盘
             self.hover = self._cell_at(event.pos)
             if self.pressed_cell is not None and self.hover != self.pressed_cell:
                 self.pressed_cell = None   # 按下后拖出该格，松开时不翻（取消操作）
             return True
 
         if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.custom_open:
+                return True
             if event.button == 1 and self.restart_rect.collidepoint(event.pos):
                 self.game.restart()
                 self._reset_click_state()
@@ -272,6 +276,8 @@ class App:
             return True
 
         if event.type == pygame.MOUSEBUTTONUP:
+            if self.custom_open:
+                return True
             if event.button == 1 and self.pressed_cell is not None:
                 pressed = self.pressed_cell
                 self.pressed_cell = None
