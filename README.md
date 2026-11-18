@@ -101,7 +101,8 @@ minesweeper-demo/
 │   ├── theme.py             # 颜色 / 尺寸常量，改配色只动这一个文件
 │   └── ui.py                # pygame 渲染与输入，只画图 + 转发操作
 ├── tests/
-│   └── test_core.py         # 41 个单元测试，覆盖布雷、计数、洪水填充、和弦、自动插旗、胜负、错旗、难度校验
+│   ├── test_core.py         # 45 个规则层单元测试：布雷、计数、洪水填充、和弦、自动插旗、胜负、错旗、难度校验、退化路径
+│   └── test_ui.py           # 38 个界面层黑盒测试：只发事件看结果，点/拖/右键/双击/按键/面板/像素
 ├── docs/
 │   ├── preview.png          # 预览图（tools/shots.py 生成）
 │   ├── preview-intermediate.png
@@ -113,7 +114,9 @@ minesweeper-demo/
 │   ├── REQUIREMENTS.md      # 需求规格 + 需求/实现/测试追踪矩阵
 │   └── DEV_PLAN.md          # 迭代计划与提交规范
 ├── tools/
-│   └── shots.py             # 批量生成预览图（无窗口，可用于 CI）
+│   ├── shots.py             # 批量生成预览图（无窗口，可用于 CI）
+│   ├── stress.py            # 规则层随机打压：几百局连打，每步校验不变量
+│   └── ui_soak.py           # 界面层猴测：随机事件流 + 每步重绘
 ├── assets/
 │   └── README.md            # 素材来源与授权说明（当前无外部素材）
 ├── requirements.txt
@@ -136,7 +139,7 @@ minesweeper-demo/
 
 这样拆的好处很实际：
 
-1. **规则可测**：`core.py` 不碰窗口，41 个测试 0.03 秒跑完，改逻辑不怕回归；
+1. **规则可测**：`core.py` 不碰窗口，45 个测试 0.03 秒跑完，改逻辑不怕回归；
 2. **换皮容易**：配色全在 `theme.py`，改一套就是另一个风格；
 3. **换前端容易**：想再做一个网页版，`core.py` 原样搬过去就能用。
 
@@ -150,7 +153,23 @@ minesweeper-demo/
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -t . -v
+python -m unittest discover -s tests -t . -v          # 83 条单测，约 5 秒
+python -m coverage run --source=minesweeper -m unittest discover -s tests -t .
+python -m coverage report -m                          # 当前 99%
+```
+
+两层测试的分工：
+
+| 层 | 文件 | 做法 | 覆盖什么 |
+| --- | --- | --- | --- |
+| 规则层（白盒） | `tests/test_core.py` | 直接调 `Board`/`Game`，构造精确局面 | 布雷、计数、连锁、和弦、自动插旗、胜负、难度校验、退化路径 |
+| 界面层（黑盒） | `tests/test_ui.py` | 只注入 `pygame` 事件，再看盘面/几何/像素 | 点击、拖出取消、右键、双击三态、键盘、面板、终局渲染 |
+| 随机打压 | `tools/stress.py` | 连打几百局，每步校验不变量 | 逻辑不变量：雷数、计数一致、旗不超数字、状态不回退、胜负与盘面一致 |
+| 界面猴测 | `tools/ui_soak.py` | 随机混合事件流，每步重绘 | 几何自洽、状态机、终局冻结、渲染不炸 |
+
+```bash
+python tools/stress.py --games 200 --seed 7       # 纯逻辑打压
+python tools/ui_soak.py --episodes 60 --events 80 # 界面猴测
 ```
 
 覆盖点：棋盘初始化与非法参数、首点必安全（50 个种子）、雷数精确性、邻雷计数与暴力算法逐格比对、
