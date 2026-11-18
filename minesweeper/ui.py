@@ -28,10 +28,28 @@ from .core import CellState, GameStatus
 from .game import Game
 
 
+def _system_double_click_ms() -> int:
+    """双击判定窗口跟随系统设置。
+
+    Windows 默认是 500ms，写死 400ms 会让"稍慢一点的双击"被判成两次单击，
+    表现就是"双击没反应"。取不到系统值（非 Windows / 调用失败）时退回 500ms。
+    """
+    try:
+        import ctypes
+
+        value = int(ctypes.windll.user32.GetDoubleClickTime())
+        if 200 <= value <= 900:      # 合理区间，防止读到异常值
+            return value
+    except Exception:
+        pass
+    return 500
+
+
 class App:
     FPS = 60
     RESTART_SIZE = (108, 34)
-    DOUBLE_CLICK_MS = 400   # 双击判定窗口（毫秒）
+    DOUBLE_CLICK_MS = _system_double_click_ms()   # 双击判定窗口（毫秒，跟随系统）
+    CHORD_HINT_MS = 180                           # 和弦条件不满足时的边框闪烁时长
 
     def __init__(self, levels: list[LevelConfig], level_key: str, seed: int | None = None) -> None:
         self._enable_dpi_awareness()
@@ -65,6 +83,7 @@ class App:
         self.game = Game(self.levels[index], seed=self.seed)
         self.hover = None
         self._wrong_flags: set[tuple[int, int]] = set()
+        self._chord_hint: tuple[tuple[int, int], int] | None = None   # (格坐标, 到期毫秒)
         self._reset_click_state()
         self._layout()
         self.screen = pygame.display.set_mode((self.width, self.height))
@@ -185,7 +204,10 @@ class App:
         )
         if is_double_click:
             self._reset_click_state()   # 只消费一次，三连击不会连续和弦
-            self.game.chord(row, col)
+            if not self.game.chord(row, col):
+                # 条件不满足（旗数对不上 / 没可翻邻格）：闪一下边框，
+                # 让玩家知道"双击被识别了"，而不是以为程序没反应（F-15）
+                self._chord_hint = (cell, pygame.time.get_ticks() + self.CHORD_HINT_MS)
         else:
             self._last_click_cell = cell
             self._last_click_time = now
@@ -225,6 +247,13 @@ class App:
             elif cell.adjacent > 0:
                 color = theme.NUMBER_COLORS.get(cell.adjacent, theme.TEXT)
                 self._text(str(cell.adjacent), int(self.cell * 0.62), color, rect.center)
+            # 和弦条件不满足时闪一下边框（F-15），提示"双击被识别了，只是旗数不够"
+            if (
+                self._chord_hint is not None
+                and self._chord_hint[0] == (row, col)
+                and pygame.time.get_ticks() < self._chord_hint[1]
+            ):
+                pygame.draw.rect(self.screen, theme.FLAG_RED, rect, width=2)
             return
 
         pressed = self.pressed_cell == (row, col)
