@@ -23,7 +23,15 @@ import sys
 import pygame
 
 from . import theme
-from .config import LevelConfig, find_level
+from .config import (
+    COLS_RANGE,
+    ROWS_RANGE,
+    SAFE_ZONE_CELLS,
+    LevelConfig,
+    find_level,
+    make_custom_level,
+    validate_level,
+)
 from .core import CellState, GameStatus
 from .game import Game
 
@@ -51,7 +59,13 @@ class App:
     DOUBLE_CLICK_MS = _system_double_click_ms()   # 双击判定窗口（毫秒，跟随系统）
     CHORD_HINT_MS = 180                           # 和弦条件不满足时的边框闪烁时长
 
-    def __init__(self, levels: list[LevelConfig], level_key: str, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        levels: list[LevelConfig],
+        level_key: str,
+        seed: int | None = None,
+        custom_level: LevelConfig | None = None,
+    ) -> None:
         self._enable_dpi_awareness()
 
         pygame.init()
@@ -62,8 +76,20 @@ class App:
         self.hover: tuple[int, int] | None = None
         self._reset_click_state()
 
-        self.level_index = levels.index(find_level(levels, level_key))
-        self._load_level(self.level_index)
+        # 自定义难度面板（F-17）
+        self.custom_open = False
+        self.custom_error = ""
+        self.custom_index = 0
+        self.custom_fields = ["", "", ""]     # 行 / 列 / 雷
+
+        if custom_level is not None:
+            self.level_index = -1
+            self.custom_level = custom_level
+            self._start_level(custom_level)
+        else:
+            self.custom_level = None
+            self.level_index = levels.index(find_level(levels, level_key))
+            self._start_level(self.levels[self.level_index])
 
     # ---------- 初始化辅助 ----------
 
@@ -79,15 +105,20 @@ class App:
                 pass
 
     def _load_level(self, index: int) -> None:
+        """切到预设难度（1/2/3 键）。"""
         self.level_index = index
-        self.game = Game(self.levels[index], seed=self.seed)
+        self.custom_level = None
+        self._start_level(self.levels[index])
+
+    def _start_level(self, level: LevelConfig) -> None:
+        self.game = Game(level, seed=self.seed)
         self.hover = None
         self._wrong_flags: set[tuple[int, int]] = set()
         self._hint: tuple[tuple[int, int], int, tuple[int, int, int]] | None = None  # (格, 到期, 颜色)
         self._reset_click_state()
         self._layout()
         self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption(f"Minesweeper Demo - {self.levels[index].name}")
+        pygame.display.set_caption(f"Minesweeper Demo - {level.name}")
 
     def _reset_click_state(self) -> None:
         """清空点击/按下状态（重开、切难度、双击消费后都要调，避免跨局误触发）。"""
@@ -96,9 +127,18 @@ class App:
         self.pressed_cell: tuple[int, int] | None = None
 
     def _layout(self) -> None:
-        """按棋盘尺寸算出窗口几何，切难度时自动重算。"""
+        """按棋盘尺寸算出窗口几何，切难度时自动重算。
+
+        自定义大盘面（比如 40×60）会超出屏幕，这里按格子数自动缩小单元格，
+        保证窗口不会长到屏幕外；预设三档的格子尺寸仍是 CELL_SIZE。
+        """
         level = self.game.level
-        self.cell = theme.CELL_SIZE
+        self.cell = min(
+            theme.CELL_SIZE,
+            theme.MAX_BOARD_W // level.cols,
+            theme.MAX_BOARD_H // level.rows,
+        )
+        self.cell = max(self.cell, theme.MIN_CELL_SIZE)
         self.board_x = theme.MARGIN
         self.board_y = theme.MARGIN + theme.HUD_HEIGHT + theme.MARGIN
         self.board_w = level.cols * self.cell
@@ -111,6 +151,60 @@ class App:
         )
         self.restart_rect = pygame.Rect((0, 0), self.RESTART_SIZE)
         self.restart_rect.center = (self.width // 2, theme.MARGIN + theme.HUD_HEIGHT // 2)
+
+    # ---------- 自定义难度面板（F-17） ----------
+
+    CUSTOM_LABELS = ("行", "列", "雷")
+
+    def _open_custom_panel(self) -> None:
+        """打开面板时用当前盘面回填，玩家改一两个数就行。"""
+        level = self.game.level
+        self.custom_fields = [str(level.rows), str(level.cols), str(level.mines)]
+        self.custom_index = 0
+        self.custom_error = ""
+        self.custom_open = True
+
+    def _close_custom_panel(self) -> None:
+        self.custom_open = False
+        self.custom_error = ""
+
+    def _handle_custom_key(self, event: pygame.event.Event) -> bool:
+        if event.key in (pygame.K_ESCAPE, pygame.K_c):
+            self._close_custom_panel()
+        elif event.key == pygame.K_RETURN:
+            self._apply_custom()
+        elif event.key in (pygame.K_TAB, pygame.K_UP, pygame.K_DOWN):
+            step = -1 if event.key == pygame.K_UP else 1
+            self.custom_index = (self.custom_index + step) % len(self.custom_fields)
+        elif event.key == pygame.K_BACKSPACE:
+            self.custom_fields[self.custom_index] = self.custom_fields[self.custom_index][:-1]
+        elif pygame.K_0 <= event.key <= pygame.K_9:
+            digit = str(event.key - pygame.K_0)
+            current = self.custom_fields[self.custom_index]
+            if len(current) < 3:
+                merged = (current + digit).lstrip("0")
+                self.custom_fields[self.custom_index] = merged or "0"
+        return True
+
+    def _apply_custom(self) -> None:
+        """校验并应用自定义盘面；不合法只在面板上提示，不破坏当前这一局。"""
+        try:
+            rows, cols, mines = (int(field or 0) for field in self.custom_fields)
+        except ValueError:
+            self.custom_error = "三个字段都必须是数字"
+            return
+
+        errors = validate_level(rows, cols, mines)
+        if errors:
+            self.custom_error = errors[0]     # 面板只放得下一行，优先报第一条
+            return
+
+        level = make_custom_level(rows, cols, mines)
+        self.custom_level = level
+        self.level_index = -1
+        self.custom_open = False
+        self.custom_error = ""
+        self._start_level(level)
 
     # ---------- 坐标换算 ----------
 
@@ -138,11 +232,15 @@ class App:
             return False
 
         if event.type == pygame.KEYDOWN:
+            if self.custom_open:
+                return self._handle_custom_key(event)
             if event.key == pygame.K_ESCAPE:
                 return False
             if event.key == pygame.K_r:
                 self.game.restart()
                 self._reset_click_state()
+            elif event.key == pygame.K_c:
+                self._open_custom_panel()
             elif pygame.K_1 <= event.key <= pygame.K_9:
                 index = event.key - pygame.K_1
                 if index < len(self.levels):
@@ -240,6 +338,8 @@ class App:
             self._draw_banner(won=False)
         elif self.game.status is GameStatus.WON:
             self._draw_banner(won=True)
+        if self.custom_open:
+            self._draw_custom_panel()
         pygame.display.flip()
 
     def _draw_board(self) -> None:
@@ -394,8 +494,52 @@ class App:
         )
         self._text("press R to restart", 18, theme.TEXT_DIM, (card.centerx, card.y + 120))
 
-    # ---------- 文本 ----------
+    def _draw_custom_panel(self) -> None:
+        """自定义难度面板：轻蒙层 + 居中卡片，三个数字框，当前字段高亮。"""
+        area = pygame.Rect(self.board_x, self.board_y, self.board_w, self.board_h)
+        veil = pygame.Surface(area.size, pygame.SRCALPHA)
+        veil.fill((255, 255, 255, 120))
+        self.screen.blit(veil, area.topleft)
 
+        # 卡片宽度同时受窗口和盘面约束：5×5 这种小盘面也不能让卡片露出窗口
+        card_w = min(340, self.width - 24)
+        card = pygame.Rect(0, 0, card_w, 190)
+        card.center = area.center
+        pygame.draw.rect(self.screen, theme.PANEL, card, border_radius=14)
+        pygame.draw.rect(self.screen, theme.ACCENT, card, width=2, border_radius=14)
+
+        self._text("自定义难度", 30, theme.TEXT, (card.centerx, card.y + 28))
+        hint_size = 16 if card_w >= 300 else 13
+
+        for index, label in enumerate(self.CUSTOM_LABELS):
+            row_y = card.y + 66 + index * 30
+            self._text(label, 20, theme.TEXT_DIM, (card.x + 34, row_y))
+            box = pygame.Rect(0, 0, 96, 26)
+            box.left = card.x + 62
+            box.centery = row_y
+            active = index == self.custom_index
+            pygame.draw.rect(self.screen, theme.CELL_OPEN, box, border_radius=6)
+            pygame.draw.rect(
+                self.screen,
+                theme.ACCENT if active else theme.PANEL_EDGE,
+                box,
+                width=2 if active else 1,
+                border_radius=6,
+            )
+            self._text(self.custom_fields[index] or "—", 20, theme.TEXT, box.center)
+
+        if self.custom_error:
+            self._text(self.custom_error, hint_size, theme.LOST_RED, (card.centerx, card.y + 148))
+        else:
+            self._text("Tab 切换 · Enter 应用", hint_size, theme.TEXT_DIM, (card.centerx, card.y + 148))
+        self._text(
+            f"行 {ROWS_RANGE[0]}-{ROWS_RANGE[1]} 列 {COLS_RANGE[0]}-{COLS_RANGE[1]} 雷 1~行×列-{SAFE_ZONE_CELLS}",
+            max(11, hint_size - 2),
+            theme.TEXT_DIM,
+            (card.centerx, card.y + 172),
+        )
+
+    # ---------- 文本 ----------
     def _font(self, size: int) -> pygame.font.Font:
         if size not in self._fonts:
             self._fonts[size] = pygame.font.Font(None, size)

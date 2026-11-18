@@ -15,7 +15,7 @@ import os
 import sys
 from pathlib import Path
 
-from minesweeper.config import find_level, load_levels
+from minesweeper.config import find_level, load_levels, make_custom_level, validate_level
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,6 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="扫雷 Demo（Python + pygame），逻辑与渲染分层实现",
     )
     parser.add_argument("--level", default="beginner", help="难度 key，见 config/levels.json")
+    parser.add_argument("--rows", type=int, default=None, help="自定义行数（与 --cols/--mines 同用）")
+    parser.add_argument("--cols", type=int, default=None, help="自定义列数")
+    parser.add_argument("--mines", type=int, default=None, help="自定义雷数")
     parser.add_argument("--seed", type=int, default=None, help="随机种子，指定后局面可复现")
     parser.add_argument("--list-levels", action="store_true", help="列出全部难度后退出")
     parser.add_argument("--smoke", action="store_true", help="无窗口渲染一帧做自检")
@@ -46,6 +49,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"未知难度: {args.level}，可用值见 --list-levels", file=sys.stderr)
         return 2
 
+    # 自定义盘面（F-17）：三个参数必须同时给，缺一个就报错而不是随便补默认值
+    custom_level = None
+    given = [args.rows, args.cols, args.mines]
+    if any(value is not None for value in given):
+        if any(value is None for value in given):
+            print("--rows/--cols/--mines 必须同时提供", file=sys.stderr)
+            return 2
+        errors = validate_level(args.rows, args.cols, args.mines)
+        if errors:
+            print("自定义盘面不合法：" + "；".join(errors), file=sys.stderr)
+            return 2
+        custom_level = make_custom_level(args.rows, args.cols, args.mines)
+
     # 自检模式必须在 pygame 初始化前切到 dummy 视频驱动，否则会真的弹窗
     if args.smoke:
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -55,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
 
     shot_path = Path(args.shot)
     shot_path.parent.mkdir(parents=True, exist_ok=True)
-    app = App(levels, args.level, seed=args.seed)
+    app = App(levels, args.level, seed=args.seed, custom_level=custom_level)
 
     if args.smoke:
         status = app.smoke(shot_path=shot_path, seed=args.seed or 7)

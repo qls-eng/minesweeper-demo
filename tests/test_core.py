@@ -9,7 +9,13 @@ from __future__ import annotations
 import random
 import unittest
 
-from minesweeper.config import LevelConfig, find_level, load_levels
+from minesweeper.config import (
+    LevelConfig,
+    find_level,
+    load_levels,
+    make_custom_level,
+    validate_level,
+)
 from minesweeper.core import Board, CellState, GameStatus
 from minesweeper.game import Game
 
@@ -353,6 +359,35 @@ class ConfigTest(unittest.TestCase):
     def test_unknown_level_raises(self):
         with self.assertRaises(KeyError):
             find_level(load_levels(), "nightmare")
+
+
+class CustomLevelTest(unittest.TestCase):
+    """F-17：自定义难度的区间校验与构造。"""
+
+    def test_valid_level_has_no_errors(self):
+        self.assertEqual(validate_level(20, 20, 80), [])
+
+    def test_rows_and_cols_bounds(self):
+        self.assertTrue(any("行数" in e for e in validate_level(3, 20, 10)))
+        self.assertTrue(any("行数" in e for e in validate_level(41, 20, 10)))
+        self.assertTrue(any("列数" in e for e in validate_level(20, 4, 10)))
+        self.assertTrue(any("列数" in e for e in validate_level(20, 61, 10)))
+
+    def test_mines_bounds_leave_room_for_safe_zone(self):
+        # 9x9 最多 81-9=72 颗雷：再多就放不下首点 3x3 安全区
+        self.assertEqual(validate_level(9, 9, 72), [])
+        self.assertTrue(any("雷数最多 72" in e for e in validate_level(9, 9, 73)))
+        self.assertTrue(any("至少为 1" in e for e in validate_level(9, 9, 0)))
+
+    def test_make_custom_level_fields(self):
+        level = make_custom_level(12, 20, 45)
+        self.assertEqual((level.rows, level.cols, level.mines), (12, 20, 45))
+        self.assertEqual(level.key, "custom")
+        self.assertEqual(level.name, "Custom 20×12")
+
+    def test_make_custom_level_rejects_invalid(self):
+        with self.assertRaises(ValueError):
+            make_custom_level(3, 3, 1)
 
 
 if __name__ == "__main__":

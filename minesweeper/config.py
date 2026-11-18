@@ -53,3 +53,40 @@ def find_level(levels: list[LevelConfig], key: str) -> LevelConfig:
         if level.key == key:
             return level
     raise KeyError(key)
+
+
+# ---------- 自定义难度（F-17）----------
+
+# 合法区间：上界按"1080p 屏上还看得清"来定，下界保证能摆下首点安全区
+ROWS_RANGE = (5, 40)
+COLS_RANGE = (5, 60)
+SAFE_ZONE_CELLS = 9   # 首点安全区 3×3，雷必须放得下
+
+
+def validate_level(rows: int, cols: int, mines: int) -> list[str]:
+    """校验自定义盘面，返回错误说明列表（空列表表示合法）。
+
+    放在 config 层而不是 UI：这样规则能单测，UI 只负责把错误文案画出来。
+    """
+    errors: list[str] = []
+
+    if not (ROWS_RANGE[0] <= rows <= ROWS_RANGE[1]):
+        errors.append(f"行数需在 {ROWS_RANGE[0]}–{ROWS_RANGE[1]} 之间（当前 {rows}）")
+    if not (COLS_RANGE[0] <= cols <= COLS_RANGE[1]):
+        errors.append(f"列数需在 {COLS_RANGE[0]}–{COLS_RANGE[1]} 之间（当前 {cols}）")
+
+    if rows > 0 and cols > 0:
+        max_mines = rows * cols - SAFE_ZONE_CELLS
+        if mines < 1:
+            errors.append("雷数至少为 1")
+        elif mines > max_mines:
+            errors.append(f"雷数最多 {max_mines}（要留出首点 3×3 安全区，当前 {mines}）")
+    return errors
+
+
+def make_custom_level(rows: int, cols: int, mines: int) -> LevelConfig:
+    """校验通过则返回一档自定义难度；不通过抛出 ValueError（带全部原因）。"""
+    errors = validate_level(rows, cols, mines)
+    if errors:
+        raise ValueError("；".join(errors))
+    return LevelConfig("custom", f"Custom {cols}×{rows}", rows, cols, mines)

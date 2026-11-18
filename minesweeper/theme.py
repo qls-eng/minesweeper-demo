@@ -8,6 +8,10 @@
 CELL_SIZE = 36
 MARGIN = 14
 HUD_HEIGHT = 56
+# 自定义大盘面时单元格会按这两个上限自动缩小（F-17）
+MAX_BOARD_W = 1360
+MAX_BOARD_H = 760
+MIN_CELL_SIZE = 14
 
 # 底色
 BG = (226, 231, 240)
