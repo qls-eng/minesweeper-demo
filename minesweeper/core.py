@@ -185,6 +185,34 @@ class Board:
                 break
         return True
 
+    def auto_flag(self, row: int, col: int) -> bool:
+        """双击数字格时的自动插旗（F-16）。
+
+        依据是一条不需要猜的推理：数字 = 周围雷数。如果这个数字格周围
+        **未翻开的格子数正好等于该数字**，那它们必然全是雷，可以直接插旗。
+
+        返回是否真的插了旗。条件不满足（不是已翻开数字格、数量对不上）返回 False，
+        交给 UI 决定是走和弦还是给提示。
+        """
+        if self.is_over or not self.in_bounds(row, col):
+            return False
+
+        cell = self.cells[row][col]
+        if cell.has_mine or cell.state is not CellState.REVEALED or cell.adjacent == 0:
+            return False
+
+        hidden = [
+            (nr, nc)
+            for nr, nc in self.neighbors(row, col)
+            if self.cells[nr][nc].state is CellState.HIDDEN
+        ]
+        if not hidden or len(hidden) != cell.adjacent:
+            return False
+
+        for nr, nc in hidden:
+            self.toggle_flag(nr, nc)   # 插旗只改标记，不参与胜负判定
+        return True
+
     # ---------- 内部实现 ----------
 
     def _place_mines(self, safe_row: int, safe_col: int) -> None:

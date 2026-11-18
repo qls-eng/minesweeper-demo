@@ -83,7 +83,7 @@ class App:
         self.game = Game(self.levels[index], seed=self.seed)
         self.hover = None
         self._wrong_flags: set[tuple[int, int]] = set()
-        self._chord_hint: tuple[tuple[int, int], int] | None = None   # (格坐标, 到期毫秒)
+        self._hint: tuple[tuple[int, int], int, tuple[int, int, int]] | None = None  # (格, 到期, 颜色)
         self._reset_click_state()
         self._layout()
         self.screen = pygame.display.set_mode((self.width, self.height))
@@ -205,12 +205,24 @@ class App:
         if is_double_click:
             self._reset_click_state()   # 只消费一次，三连击不会连续和弦
             if not self.game.chord(row, col):
-                # 条件不满足（旗数对不上 / 没可翻邻格）：闪一下边框，
-                # 让玩家知道"双击被识别了"，而不是以为程序没反应（F-15）
-                self._chord_hint = (cell, pygame.time.get_ticks() + self.CHORD_HINT_MS)
+                # 和弦条件不满足，先试"自动插旗"（F-16）：
+                # 周围未翻开格数正好等于数字时，它们必然是雷，直接标上
+                if self.game.auto_flag(row, col):
+                    self._set_hint(cell, theme.WON_GREEN)    # 绿框＝已自动插旗
+                else:
+                    # 都推不出来：红框提示"双击被识别了，只是条件不够"（F-15）
+                    self._set_hint(cell, theme.FLAG_RED)
         else:
             self._last_click_cell = cell
             self._last_click_time = now
+
+    def _set_hint(self, cell: tuple[int, int], color: tuple[int, int, int]) -> None:
+        """给某格挂一个短暂的高亮边框（自动插旗 / 条件不足的反馈）。"""
+        self._hint: tuple[tuple[int, int], int, tuple[int, int, int]] | None = (
+            cell,
+            pygame.time.get_ticks() + self.CHORD_HINT_MS,
+            color,
+        )
 
     # ---------- 绘制 ----------
 
@@ -249,11 +261,11 @@ class App:
                 self._text(str(cell.adjacent), int(self.cell * 0.62), color, rect.center)
             # 和弦条件不满足时闪一下边框（F-15），提示"双击被识别了，只是旗数不够"
             if (
-                self._chord_hint is not None
-                and self._chord_hint[0] == (row, col)
-                and pygame.time.get_ticks() < self._chord_hint[1]
+                self._hint is not None
+                and self._hint[0] == (row, col)
+                and pygame.time.get_ticks() < self._hint[1]
             ):
-                pygame.draw.rect(self.screen, theme.FLAG_RED, rect, width=2)
+                pygame.draw.rect(self.screen, self._hint[2], rect, width=2)
             return
 
         pressed = self.pressed_cell == (row, col)

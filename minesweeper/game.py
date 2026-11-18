@@ -73,6 +73,17 @@ class Game:
         self._sync_timer(before)
         return changed
 
+    def auto_flag(self, row: int, col: int) -> bool:
+        """双击时的自动插旗（F-16），返回是否插了旗。
+
+        插旗不改变对局状态，但和双层循环保持一致：统一从 Game 走，HUD 的剩余雷数
+        才能跟着更新。
+        """
+        before = self.board.status
+        changed = self.board.auto_flag(row, col)
+        self._sync_timer(before)
+        return changed
+
     # ---------- 内部 ----------
 
     def _sync_timer(self, before: GameStatus) -> None:

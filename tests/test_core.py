@@ -224,6 +224,58 @@ class WrongFlagTest(unittest.TestCase):
         self.assertEqual(board.wrong_flags(), [])
 
 
+class AutoFlagTest(unittest.TestCase):
+    """F-16 双击自动插旗：未翻开邻格数 == 数字 时，这些格必然是雷。"""
+
+    def _board_with_exact_hidden(self) -> Board:
+        # 5x5，顶排三颗雷；把中心格 (1,1) 和它的非雷邻格标成已翻开，
+        # 于是 (1,1) 显示 3，且周围正好剩 3 个未翻开格（就是那三颗雷）。
+        # 这里直接改 state 而不是逐个 reveal，是为了避开连锁展开把整盘翻完导致提前胜利。
+        board = make_pattern_board(5, 5, [(0, 0), (0, 1), (0, 2)])
+        for r, c in ((1, 1), (1, 0), (1, 2), (2, 0), (2, 1), (2, 2)):
+            board.cells[r][c].state = CellState.REVEALED
+        board.status = GameStatus.PLAYING   # status 是状态字段，只有走 reveal 才会推进，这里手动补上
+        hidden = [
+            (nr, nc)
+            for nr, nc in board.neighbors(1, 1)
+            if board.cells[nr][nc].state is CellState.HIDDEN
+        ]
+        self.assertEqual(len(hidden), 3, "用例前提：中心格周围应只剩 3 个未翻开格")
+        self.assertEqual(board.cells[1][1].adjacent, 3, "用例前提：中心格应显示 3")
+        self.assertIs(board.status, GameStatus.PLAYING, "用例前提：局面还没结束")
+        return board
+
+    def test_flags_all_hidden_neighbours(self):
+        board = self._board_with_exact_hidden()
+        self.assertTrue(board.auto_flag(1, 1))
+        for r, c in ((0, 0), (0, 1), (0, 2)):
+            self.assertIs(board.cells[r][c].state, CellState.FLAGGED)
+
+    def test_returns_false_when_counts_do_not_match(self):
+        # 5x5 只有一颗雷，中心格显示 1 但周围 8 格全未翻开：推不出结论，不插旗
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.reveal(2, 2)
+        before = sum(
+            1 for row in board.cells for cell in row if cell.state is CellState.FLAGGED
+        )
+        self.assertFalse(board.auto_flag(2, 2))
+        after = sum(
+            1 for row in board.cells for cell in row if cell.state is CellState.FLAGGED
+        )
+        self.assertEqual(before, after)
+
+    def test_no_flag_on_zero_cell_or_hidden_cell(self):
+        board = self._board_with_exact_hidden()
+        self.assertFalse(board.auto_flag(2, 0))   # 数字格之外：0 格没有推理基础
+        self.assertFalse(board.auto_flag(0, 0))   # 未翻开的格（还是颗雷）
+
+    def test_no_flag_after_game_over(self):
+        board = self._board_with_exact_hidden()
+        board.reveal(0, 0)                        # 踩雷
+        self.assertIs(board.status, GameStatus.LOST)
+        self.assertFalse(board.auto_flag(1, 1))
+
+
 class EndGameTest(unittest.TestCase):
     def test_mine_click_loses_and_exposes_all_mines(self):
         board = Board(make_level(9, 9, 10), rng=random.Random(5))
