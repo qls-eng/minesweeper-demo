@@ -64,15 +64,17 @@ class App:
         self.level_index = index
         self.game = Game(self.levels[index], seed=self.seed)
         self.hover = None
+        self._wrong_flags: set[tuple[int, int]] = set()
         self._reset_click_state()
         self._layout()
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption(f"Minesweeper Demo - {self.levels[index].name}")
 
     def _reset_click_state(self) -> None:
-        """清空双击判定状态（重开、切难度时都要清，避免跨局误触发）。"""
+        """清空点击/按下状态（重开、切难度、双击消费后都要调，避免跨局误触发）。"""
         self._last_click_cell: tuple[int, int] | None = None
         self._last_click_time = -9999
+        self.pressed_cell: tuple[int, int] | None = None
 
     def _layout(self) -> None:
         """按棋盘尺寸算出窗口几何，切难度时自动重算。"""
@@ -130,6 +132,8 @@ class App:
 
         if event.type == pygame.MOUSEMOTION:
             self.hover = self._cell_at(event.pos)
+            if self.pressed_cell is not None and self.hover != self.pressed_cell:
+                self.pressed_cell = None   # 按下后拖出该格，松开时不翻（取消操作）
             return True
 
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -143,9 +147,21 @@ class App:
                 return True
 
             if event.button == 1:
-                self._on_left_click(cell)
+                # 只记录"按下"，真正翻开在松开时做（F-13）
+                if self.game.status not in (GameStatus.WON, GameStatus.LOST):
+                    self.pressed_cell = cell
             elif event.button == 3:
                 self.game.toggle_flag(*cell)
+            return True
+
+        if event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1 and self.pressed_cell is not None:
+                pressed = self.pressed_cell
+                self.pressed_cell = None
+                cell = self._cell_at(event.pos)
+                if cell is not None and cell == pressed:
+                    self._on_left_click(cell)
+            return True
         return True
 
     def _on_left_click(self, cell: tuple[int, int]) -> None:
@@ -178,6 +194,12 @@ class App:
 
     def draw(self) -> None:
         self.screen.fill(theme.BG)
+        # 错旗只在失败时算一次，避免逐格重复判断
+        self._wrong_flags = (
+            set(self.game.board.wrong_flags())
+            if self.game.status is GameStatus.LOST
+            else set()
+        )
         self._draw_board()
         self._draw_hud()
         if self.game.status is GameStatus.LOST:
@@ -205,20 +227,48 @@ class App:
                 self._text(str(cell.adjacent), int(self.cell * 0.62), color, rect.center)
             return
 
-        hovered = self.hover == (row, col)
-        base = theme.CELL_COVERED_HOVER if hovered else theme.CELL_COVERED
-        pygame.draw.rect(self.screen, base, rect)
-        # 上/左高光 + 下/右投影，做出微微凸起的手感，不需要任何贴图
-        pygame.draw.line(self.screen, theme.CELL_COVERED_LIGHT, rect.topleft, rect.topright)
-        pygame.draw.line(self.screen, theme.CELL_COVERED_LIGHT, rect.topleft, rect.bottomleft)
-        pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.bottomleft, rect.bottomright)
-        pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.topright, rect.bottomright)
+        pressed = self.pressed_cell == (row, col)
+        if pressed:
+            # 反转立体：上/左投影、下/右高光，视觉上"按下去"（F-13）
+            pygame.draw.rect(self.screen, theme.CELL_COVERED_SHADOW, rect)
+            pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.topleft, rect.topright)
+            pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.topleft, rect.bottomleft)
+            pygame.draw.line(self.screen, theme.CELL_COVERED_LIGHT, rect.bottomleft, rect.bottomright)
+            pygame.draw.line(self.screen, theme.CELL_COVERED_LIGHT, rect.topright, rect.bottomright)
+        else:
+            hovered = self.hover == (row, col)
+            base = theme.CELL_COVERED_HOVER if hovered else theme.CELL_COVERED
+            pygame.draw.rect(self.screen, base, rect)
+            # 上/左高光 + 下/右投影，做出微微凸起的手感，不需要任何贴图
+            pygame.draw.line(self.screen, theme.CELL_COVERED_LIGHT, rect.topleft, rect.topright)
+            pygame.draw.line(self.screen, theme.CELL_COVERED_LIGHT, rect.topleft, rect.bottomleft)
+            pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.bottomleft, rect.bottomright)
+            pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.topright, rect.bottomright)
 
         if cell.state is CellState.FLAGGED or (
             self.game.status is GameStatus.WON and cell.has_mine
         ):
             # 胜利时把没插旗的雷也画成旗子，避免终局画面留一堆灰块像没玩完
             self._draw_flag(rect)
+            if (row, col) in self._wrong_flags:
+                self._draw_cross(rect)   # 失败的错旗（F-14）
+
+    def _draw_cross(self, rect: pygame.Rect) -> None:
+        inset = int(rect.width * 0.12)
+        pygame.draw.line(
+            self.screen,
+            theme.LOST_RED,
+            (rect.left + inset, rect.top + inset),
+            (rect.right - inset, rect.bottom - inset),
+            3,
+        )
+        pygame.draw.line(
+            self.screen,
+            theme.LOST_RED,
+            (rect.right - inset, rect.top + inset),
+            (rect.left + inset, rect.bottom - inset),
+            3,
+        )
 
     def _draw_flag(self, rect: pygame.Rect) -> None:
         scale = self.cell / 34.0

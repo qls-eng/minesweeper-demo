@@ -90,6 +90,57 @@ def stage_won(app: App, seed: int = 7) -> None:
     assert app.game.status is GameStatus.WON, "胜利画面没进入 WON，检查翻格逻辑"
 
 
+def stage_pressed(app: App, seed: int = 7, cell: tuple[int, int] | None = None) -> None:
+    """按下未松开的状态：给一个覆盖格做凹陷，验证 F-13 的视觉。"""
+    stage_playing(app, seed=seed)
+    board = app.game.board
+    target = cell or next(
+        (r, c)
+        for r in range(app.game.level.rows)
+        for c in range(app.game.level.cols)
+        if board.cells[r][c].state is CellState.HIDDEN
+    )
+    app.hover = target
+    app.pressed_cell = target
+    assert app.pressed_cell is not None
+
+
+def stage_wrong_flag(app: App, seed: int = 7) -> None:
+    """失败画面里同时有插对的旗和插错的旗，验证 F-14 的叉。"""
+    stage_playing(app, seed=seed, flag_count=0)
+    board = app.game.board
+    level = app.game.level
+
+    # 故意在非雷格插一面错旗
+    wrong = next(
+        (r, c)
+        for r in range(level.rows)
+        for c in range(level.cols)
+        if board.cells[r][c].state is CellState.HIDDEN and not board.cells[r][c].has_mine
+    )
+    app.game.toggle_flag(*wrong)
+
+    # 再在真雷上插一面对的旗做对照
+    right = next(
+        (r, c)
+        for r in range(level.rows)
+        for c in range(level.cols)
+        if board.cells[r][c].has_mine and board.cells[r][c].state is CellState.HIDDEN
+    )
+    app.game.toggle_flag(*right)
+
+    # 踩另一颗雷结束
+    mine = next(
+        (r, c)
+        for r in range(level.rows)
+        for c in range(level.cols)
+        if board.cells[r][c].has_mine and board.cells[r][c].state is CellState.HIDDEN
+    )
+    app.game.reveal(*mine)
+    assert app.game.status is GameStatus.LOST, "错旗画面没进入 LOST"
+    assert board.wrong_flags(), "错旗画面里没有错旗，检查挑格逻辑"
+
+
 def save(app: App, name: str) -> Path:
     path = DOCS / name
     app.draw()
@@ -123,11 +174,20 @@ def main() -> int:
     stage_lost(lost, seed=42)
     save(lost, "preview-lost.png")
 
+    pressed = App(levels, "beginner", seed=42)
+    stage_pressed(pressed, seed=42)
+    save(pressed, "preview-pressed.png")
+
+    wrong_flag = App(levels, "beginner", seed=42)
+    stage_wrong_flag(wrong_flag, seed=42)
+    save(wrong_flag, "preview-wrongflag.png")
+
     import pygame
 
     pygame.quit()
     for name in ("preview.png", "preview-intermediate.png", "preview-expert.png",
-                 "preview-win.png", "preview-lost.png"):
+                 "preview-win.png", "preview-lost.png", "preview-pressed.png",
+                 "preview-wrongflag.png"):
         print(f"docs/{name}")
     return 0
 

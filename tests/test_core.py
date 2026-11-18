@@ -203,6 +203,27 @@ class ChordTest(unittest.TestCase):
         self.assertFalse(board.chord(1, 1))
 
 
+class WrongFlagTest(unittest.TestCase):
+    """F-14 错旗打叉的规则层支撑。"""
+
+    def test_lists_only_flagged_non_mines(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.toggle_flag(0, 0)    # 插对的旗
+        board.toggle_flag(2, 2)    # 插错的旗
+        self.assertEqual(board.wrong_flags(), [(2, 2)])
+
+    def test_empty_when_all_flags_correct(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.toggle_flag(0, 0)
+        self.assertEqual(board.wrong_flags(), [])
+
+    def test_revealed_cells_never_count_as_wrong_flag(self):
+        board = make_pattern_board(5, 5, [(0, 0)])
+        board.reveal(3, 3)         # 已翻开格无法插旗
+        board.toggle_flag(3, 3)
+        self.assertEqual(board.wrong_flags(), [])
+
+
 class EndGameTest(unittest.TestCase):
     def test_mine_click_loses_and_exposes_all_mines(self):
         board = Board(make_level(9, 9, 10), rng=random.Random(5))

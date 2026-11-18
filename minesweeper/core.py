@@ -96,6 +96,20 @@ class Board:
     def is_over(self) -> bool:
         return self.status in (GameStatus.WON, GameStatus.LOST)
 
+    def wrong_flags(self) -> list[tuple[int, int]]:
+        """插在非雷格上的旗（F-14）。
+
+        放在规则层而不是画图时的临时判断，是为了能单测：
+        界面只消费这个结果，不用自己重算"这面旗对不对"。
+        """
+        return [
+            (row, col)
+            for row in range(self.rows)
+            for col in range(self.cols)
+            if self.cells[row][col].state is CellState.FLAGGED
+            and not self.cells[row][col].has_mine
+        ]
+
     # ---------- 交互 ----------
 
     def reveal(self, row: int, col: int) -> None:
