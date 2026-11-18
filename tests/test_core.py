@@ -281,6 +281,55 @@ class AutoFlagTest(unittest.TestCase):
         self.assertIs(board.status, GameStatus.LOST)
         self.assertFalse(board.auto_flag(1, 1))
 
+    def test_existing_flags_are_subtracted(self):
+        """回归：已有旗时不能只看"未翻开格数 == 数字"。
+
+        数字 3、周围已有 2 面旗（都插在真雷上），还剩 3 个未翻开格但真实只有 1 颗雷。
+        旧实现会把这 3 格全插上，导致 3 周围出现 5 面旗、其中 2 格不是雷。
+        正确条件是"未翻开格数 == 数字 - 已有旗数"，这里 3 != 1，应当拒绝。
+        """
+        board = make_pattern_board(5, 5, [(0, 0), (0, 1), (0, 2)])
+        for r, c in ((1, 1), (1, 0), (1, 2), (2, 1)):
+            board.cells[r][c].state = CellState.REVEALED
+        board.cells[0][0].state = CellState.FLAGGED      # 两面旗都插在真雷上
+        board.cells[0][1].state = CellState.FLAGGED
+        board.status = GameStatus.PLAYING
+
+        hidden = [
+            (nr, nc)
+            for nr, nc in board.neighbors(1, 1)
+            if board.cells[nr][nc].state is CellState.HIDDEN
+        ]
+        self.assertEqual(len(hidden), 3, "用例前提：还剩 3 个未翻开格")
+        self.assertEqual(board.cells[1][1].adjacent, 3, "用例前提：中心格显示 3")
+        self.assertEqual(board.cells[1][1].adjacent - 2, 1, "用例前提：剩余待标雷数只有 1")
+
+        self.assertFalse(board.auto_flag(1, 1))
+        wrong = [
+            (nr, nc)
+            for nr, nc in board.neighbors(1, 1)
+            if board.cells[nr][nc].state is CellState.FLAGGED
+            and not board.cells[nr][nc].has_mine
+        ]
+        self.assertEqual(wrong, [])
+
+    def test_flags_remaining_when_requirement_matches(self):
+        # 数字 3、已有 1 面旗（真雷）、剩 2 个未翻开格且都是雷：条件成立，应该插上这 2 格
+        board = make_pattern_board(5, 5, [(0, 0), (0, 1), (0, 2)])
+        for r, c in ((1, 1), (1, 0), (1, 2), (2, 0), (2, 1), (2, 2)):
+            board.cells[r][c].state = CellState.REVEALED
+        board.cells[0][0].state = CellState.FLAGGED
+        board.status = GameStatus.PLAYING
+
+        self.assertTrue(board.auto_flag(1, 1))
+        for r, c in ((0, 1), (0, 2)):
+            self.assertIs(board.cells[r][c].state, CellState.FLAGGED)
+        self.assertEqual(
+            sum(1 for nr, nc in board.neighbors(1, 1) if board.cells[nr][nc].state is CellState.FLAGGED),
+            3,
+            "周围旗数应等于数字 3",
+        )
+
 
 class EndGameTest(unittest.TestCase):
     def test_mine_click_loses_and_exposes_all_mines(self):

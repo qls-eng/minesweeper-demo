@@ -189,7 +189,11 @@ class Board:
         """双击数字格时的自动插旗（F-16）。
 
         依据是一条不需要猜的推理：数字 = 周围雷数。如果这个数字格周围
-        **未翻开的格子数正好等于该数字**，那它们必然全是雷，可以直接插旗。
+        **还没插旗的格子数，正好等于"这个数字减去已有旗数"**，那它们必然全是雷。
+
+        这里必须把**已有的旗**算进去：数字统计的是"周围有多少颗雷"，不区分雷有没有被标出来。
+        如果只看"未翻开格数 == 数字"，那么已经有旗时就会多插旗——例如数字 3、周围已有 2 面旗、
+        还剩 3 个未翻开格（真实只有 1 颗雷），旧条件会把这 3 格全插上，错 2 格。
 
         返回是否真的插了旗。条件不满足（不是已翻开数字格、数量对不上）返回 False，
         交给 UI 决定是走和弦还是给提示。
@@ -206,7 +210,14 @@ class Board:
             for nr, nc in self.neighbors(row, col)
             if self.cells[nr][nc].state is CellState.HIDDEN
         ]
-        if not hidden or len(hidden) != cell.adjacent:
+        flagged = sum(
+            1
+            for nr, nc in self.neighbors(row, col)
+            if self.cells[nr][nc].state is CellState.FLAGGED
+        )
+
+        remaining_mines = cell.adjacent - flagged
+        if remaining_mines <= 0 or not hidden or len(hidden) != remaining_mines:
             return False
 
         for nr, nc in hidden:
