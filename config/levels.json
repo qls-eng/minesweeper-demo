@@ -1,0 +1,7 @@
+{
+  "levels": [
+    { "key": "beginner",     "name": "Beginner",     "rows": 9,  "cols": 9,  "mines": 10 },
+    { "key": "intermediate", "name": "Intermediate", "rows": 16, "cols": 16, "mines": 40 },
+    { "key": "expert",       "name": "Expert",       "rows": 16, "cols": 30, "mines": 99 }
+  ]
+}
