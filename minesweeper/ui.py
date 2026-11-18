@@ -214,7 +214,10 @@ class App:
         pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.bottomleft, rect.bottomright)
         pygame.draw.line(self.screen, theme.CELL_COVERED_SHADOW, rect.topright, rect.bottomright)
 
-        if cell.state is CellState.FLAGGED:
+        if cell.state is CellState.FLAGGED or (
+            self.game.status is GameStatus.WON and cell.has_mine
+        ):
+            # 胜利时把没插旗的雷也画成旗子，避免终局画面留一堆灰块像没玩完
             self._draw_flag(rect)
 
     def _draw_flag(self, rect: pygame.Rect) -> None:
@@ -275,17 +278,30 @@ class App:
         self._text(label, 18, edge, button.center)
 
     def _draw_banner(self, won: bool) -> None:
+        """终局提示：整体只做轻微蒙层，正文放居中卡片里。
+
+        不用大面积遮挡，是为了让玩家失败后仍能看清雷的位置与数字，方便复盘。
+        """
         area = pygame.Rect(self.board_x, self.board_y, self.board_w, self.board_h)
         overlay = pygame.Surface(area.size, pygame.SRCALPHA)
-        overlay.fill((10, 12, 16, 150))
+        overlay.fill((255, 255, 255, 96))
         self.screen.blit(overlay, area.topleft)
 
-        cx, cy = area.center
-        title = "YOU WIN" if won else "BOOM"
         color = theme.WON_GREEN if won else theme.LOST_RED
-        self._text(title, 44, color, (cx, cy - 22))
-        self._text(f"{self.game.level.name}   {self.game.elapsed_text}", 22, theme.TEXT_DIM, (cx, cy + 20))
-        self._text("press R to restart", 19, theme.TEXT_DIM, (cx, cy + 50))
+        card = pygame.Rect(0, 0, min(int(self.board_w * 0.88), 310), 152)
+        card.center = area.center
+        pygame.draw.rect(self.screen, theme.PANEL, card, border_radius=14)
+        pygame.draw.rect(self.screen, color, card, width=2, border_radius=14)
+
+        title = "YOU WIN" if won else "BOOM"
+        self._text(title, 44, color, (card.centerx, card.y + 48))
+        self._text(
+            f"{self.game.level.name}   {self.game.elapsed_text}",
+            20,
+            theme.TEXT_DIM,
+            (card.centerx, card.y + 90),
+        )
+        self._text("press R to restart", 18, theme.TEXT_DIM, (card.centerx, card.y + 120))
 
     # ---------- 文本 ----------
 
