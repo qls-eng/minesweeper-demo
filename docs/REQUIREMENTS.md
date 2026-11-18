@@ -121,7 +121,7 @@
 | F-09 | `ui.App.smoke` + `main.py --smoke` | 每次提交前手动执行 `python main.py --smoke` |
 | F-10 | `ui.App._draw_hud` | `--smoke` 截图目视 + `Game.mines_left` 用例 |
 | F-11 | `ui.App._draw_banner` | `--smoke` 构造终局截图目视 |
-| F-12 | **待实现** | **待补**（按流程：先建需求条目，再实现，再回填本行） |
+| F-12 | `core.Board.chord`、`game.Game.chord`、`ui.App._on_left_click` | `ChordTest` 6 条用例 + 无窗口模拟双击验证（翻开数 46→49，覆盖格连点两次不误触发） |
 | N-01 | `ui.App.FPS`、`core._flood_reveal` | expert 档手动实测 |
 | N-02 | `core.py` 无 pygame 依赖 | `python -m unittest discover -s tests -t . -v` |
 | N-03 | 分层结构 | 提交前自查 + code review 清单 |
@@ -147,3 +147,4 @@
 | --- | --- | --- | --- |
 | 2026-11-18 | v0.1 | 建立需求基线：11 条功能需求 + 6 条非功能需求 + 追踪矩阵 | 补齐工程流程中缺失的需求分析环节 |
 | 2026-11-18 | v0.2 | 新增 F-12 双击和弦（Must），追踪矩阵标记为待实现 | 迭代 v0.2 手感优化，需求先行 |
+| 2026-11-18 | v0.2 | F-12 实现完成，追踪矩阵回填实现位置与测试用例（共 27 条测试） | 按流程完成实现与验证 |
